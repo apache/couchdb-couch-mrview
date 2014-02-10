@@ -21,7 +21,7 @@
 -export([all_docs_key_opts/1, all_docs_key_opts/2, key_opts/1, key_opts/2]).
 -export([fold/4, fold_reduce/4]).
 -export([temp_view_to_ddoc/1]).
--export([calculate_data_size/2]).
+-export([active_size/1, external_size/1]).
 -export([validate_args/1]).
 -export([maybe_load_doc/3, maybe_load_doc/4]).
 
@@ -213,12 +213,13 @@ open_view(Db, Fd, Lang, {BTState, USeq, PSeq}, View) ->
         fun(reduce, KVs) ->
             KVs2 = detuple_kvs(expand_dups(KVs, []), []),
             {ok, Result} = couch_query_servers:reduce(Lang, FunSrcs, KVs2),
-            {length(KVs2), Result};
+            {length(KVs2), Result, reduce_external_size(KVs2, Result)};
         (rereduce, Reds) ->
-            Count = lists:sum([Count0 || {Count0, _} <- Reds]),
-            UsrReds = [UsrRedsList || {_, UsrRedsList} <- Reds],
+            Count = lists:sum(extract_reduction(Reds, counts)),
+            DataSize = lists:sum(extract_reduction(Reds, data_size)),
+            UsrReds = extract_reduction(Reds, user_reds),
             {ok, Result} = couch_query_servers:rereduce(Lang, FunSrcs, UsrReds),
-            {Count, Result}
+            {Count, Result, DataSize + erlang:external_size(Result)}
         end,
 
     Less = case couch_util:get_value(<<"collation">>, View#mrview.options) of
@@ -233,6 +234,23 @@ open_view(Db, Fd, Lang, {BTState, USeq, PSeq}, View) ->
     ],
     {ok, Btree} = couch_btree:open(BTState, Fd, ViewBtOpts),
     View#mrview{btree=Btree, update_seq=USeq, purge_seq=PSeq}.
+
+
+reduce_external_size(KVList, Reduction) ->
+    InitSize = erlang:external_size(Reduction),
+    lists:foldl(fun([[Key, _], Value], Acc) ->
+        KSize = erlang:external_size(Key),
+        VSize = erlang:external_size(Value),
+        KSize + VSize + Acc
+    end, InitSize, KVList).
+
+
+extract_reduction(Reds, counts) ->
+    [element(1, R) || R <- Reds];
+extract_reduction(Reds, user_reds) ->
+    [element(2, R) || R <- Reds];
+extract_reduction(Reds, data_size) ->
+    lists:map(fun({_, _}) -> 0; ({_, _, S}) -> S end, Reds).
 
 
 temp_view_to_ddoc({Props}) ->
@@ -255,8 +273,8 @@ temp_view_to_ddoc({Props}) ->
 
 
 get_row_count(#mrview{btree=Bt}) ->
-    {ok, {Count, _Reds}} = couch_btree:full_reduce(Bt),
-    {ok, Count}.
+    {ok, Reds} = couch_btree:full_reduce(Bt),
+    {ok, element(1, Reds)}.
 
 
 all_docs_reduce_to_count(Reductions) ->
@@ -628,20 +646,22 @@ reverse_key_default(<<255>>) -> <<>>;
 reverse_key_default(Key) -> Key.
 
 
-calculate_data_size(IdBt, Views) ->
-    SumFun = fun(#mrview{btree=Bt}, Acc) ->
-        sum_btree_sizes(Acc, couch_btree:size(Bt))
-    end,
-    Size = lists:foldl(SumFun, couch_btree:size(IdBt), Views),
-    {ok, Size}.
+active_size(#mrst{id_btree=IdBt, views=Views}) ->
+    Trees = [IdBt] ++ [Bt || #mrview{btree=Bt} <- Views],
+    lists:foldl(fun(T, Acc) ->
+        case couch_btree:size(T) of
+            _ when Acc == null -> null;
+            undefined -> null;
+            S -> Acc + S
+        end
+    end, 0, Trees).
 
 
-sum_btree_sizes(nil, _) ->
-    null;
-sum_btree_sizes(_, nil) ->
-    null;
-sum_btree_sizes(Size1, Size2) ->
-    Size1 + Size2.
+external_size(#mrst{views=Views}) ->
+    lists:foldl(fun(#mrview{btree=Btree}, Acc) ->
+        {ok, {_, _, Size}} = couch_btree:full_reduce(Btree),
+        Size + Acc
+    end, 0, Views).
 
 
 detuple_kvs([], Acc) ->
