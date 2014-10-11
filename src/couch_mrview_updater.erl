@@ -301,6 +301,7 @@ send_partial(_, _) ->
 
 
 update_task(NumChanges) ->
+    couch_stats:increment_counter([couchdb, couchjs, map_docs], NumChanges),
     [Changes, Total] = couch_task_status:get([changes_done, total_changes]),
     Changes2 = Changes + NumChanges,
     Progress = case Total of
