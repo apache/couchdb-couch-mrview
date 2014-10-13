@@ -147,7 +147,10 @@ map_docs(Parent, State0) ->
                     {erlang:max(Seq, SeqAcc), [{Id, Res} | Results]}
             end,
             FoldFun = fun(Docs, Acc) ->
-                update_task(length(Docs)),
+                LenDocs = length(Docs),
+                couch_stats:increment_counter([couchdb, mrview, map_docs],
+                                              LenDocs),
+                update_task(LenDocs),
                 lists:foldl(DocFun, Acc, Docs)
             end,
             Results = lists:foldl(FoldFun, {0, []}, Dequeued),
@@ -301,7 +304,6 @@ send_partial(_, _) ->
 
 
 update_task(NumChanges) ->
-    couch_stats:increment_counter([couchdb, mrview, map_docs], NumChanges),
     [Changes, Total] = couch_task_status:get([changes_done, total_changes]),
     Changes2 = Changes + NumChanges,
     Progress = case Total of
