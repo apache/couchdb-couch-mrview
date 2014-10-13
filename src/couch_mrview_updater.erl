@@ -143,6 +143,8 @@ map_docs(Parent, State0) ->
                 ({Id, Seq, deleted}, {SeqAcc, Results}) ->
                     {erlang:max(Seq, SeqAcc), [{Id, []} | Results]};
                 ({Id, Seq, Doc}, {SeqAcc, Results}) ->
+                    couch_stats:increment_counter([couchdb, mrview, map_docs],
+                                                  1),
                     {ok, Res} = couch_query_servers:map_doc_raw(QServer, Doc),
                     {erlang:max(Seq, SeqAcc), [{Id, Res} | Results]}
             end,
@@ -241,7 +243,7 @@ insert_results(DocId, [KVs | RKVs], [{Id, VKVs} | RVKVs], VKVAcc, VIdKeys) ->
             {[KV | Rest], [{Id, Key} | IdKeys]}
     end,
     InitAcc = {[], VIdKeys},
-    couch_stats:increment_counter([couchdb, couchjs, emits], length(KVs)),
+    couch_stats:increment_counter([couchdb, mrview, emits], length(KVs)),
     {Duped, VIdKeys0} = lists:foldl(CombineDupesFun, InitAcc, lists:sort(KVs)),
     FinalKVs = [{{Key, DocId}, Val} || {Key, Val} <- Duped] ++ VKVs,
     insert_results(DocId, RKVs, RVKVs, [{Id, FinalKVs} | VKVAcc], VIdKeys0).
