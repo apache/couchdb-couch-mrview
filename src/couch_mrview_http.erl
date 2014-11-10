@@ -33,7 +33,8 @@
     view_cb/2,
     row_to_json/1,
     row_to_json/2,
-    check_view_etag/3
+    check_view_etag/3,
+    get_view_callback/3
 ]).
 
 -include_lib("couch/include/couch_db.hrl").
