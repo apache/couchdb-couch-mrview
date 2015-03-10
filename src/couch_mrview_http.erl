@@ -207,7 +207,7 @@ is_restricted(Db, _) ->
 
 is_public_fields_configured(Db) ->
     DbName = ?b2l(Db#db.name),
-    case config:get("couch_httpd_auth", "authentication_db", "_users") of
+    case couch_dbs:name("authentication_db") of
     DbName ->
         UsersDbPublic = config:get("couch_httpd_auth", "users_db_public", "false"),
         PublicFields = config:get("couch_httpd_auth", "public_fields"),
@@ -231,9 +231,7 @@ do_all_docs_req(Req, Db, Keys, NS) ->
     {ok, Resp} = couch_httpd:etag_maybe(Req, fun() ->
         VAcc0 = #vacc{db=Db, req=Req},
         DbName = ?b2l(Db#db.name),
-        UsersDbName = config:get("couch_httpd_auth",
-                                 "authentication_db",
-                                 "_users"),
+        UsersDbName = couch_dbs:name("authentication_db"),
         IsAdmin = is_admin(Db),
         Callback = get_view_callback(DbName, UsersDbName, IsAdmin),
         couch_mrview:query_all_docs(Db, Args, Callback, VAcc0)
