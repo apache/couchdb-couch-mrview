@@ -209,14 +209,7 @@ is_public_fields_configured(Db) ->
     DbName = ?b2l(Db#db.name),
     case couch_dbs:name("authentication_db") of
     DbName ->
-        UsersDbPublic = config:get("couch_httpd_auth", "users_db_public", "false"),
-        PublicFields = config:get("couch_httpd_auth", "public_fields"),
-        case {UsersDbPublic, PublicFields} of
-        {"true", PublicFields} when PublicFields =/= undefined ->
-            true;
-        {_, _} ->
-            false
-        end;
+        couch_users_db:should_strip_public_fields();
     _ ->
         false
     end.
