@@ -328,7 +328,7 @@ filtered_view_cb(Obj, Acc) ->
 
 view_cb({meta, Meta}, #vacc{resp=undefined}=Acc) ->
     % Map function starting
-    Headers = [{"ETag", Acc#vacc.etag}],
+    Headers = append_etag_if_present([], Acc#vacc.etag),
     {ok, Resp} = chttpd:start_delayed_json_response(Acc#vacc.req, 200, Headers),
     view_cb({meta, Meta}, Acc#vacc{resp=Resp, should_close=true});
 view_cb({meta, Meta}, #vacc{resp=Resp}=Acc) ->
@@ -373,6 +373,10 @@ view_cb({error, Reason}, #vacc{resp=Resp}=Acc) ->
     {ok, Resp1} = chttpd:send_delayed_error(Resp, Reason),
     {ok, Acc#vacc{resp=Resp1}}.
 
+append_etag_if_present(Headers, undefined) ->
+    Headers;
+append_etag_if_present(Headers, Etag) ->
+    [{"ETag", Etag}|Headers].
 
 prepend_val(#vacc{prepend=Prepend}) ->
     case Prepend of
