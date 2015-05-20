@@ -273,8 +273,9 @@ design_doc_view(Req, Db, DDoc, ViewName, Keys) ->
         check_view_etag(Sig, Keys, Acc0, Req)
     end,
     Args = Args0#mrargs{preflight_fun=ETagFun},
+    Etag = couch_mrview_util:make_etag(Args, Keys),
     {ok, Resp} = couch_httpd:etag_maybe(Req, fun() ->
-        VAcc0 = #vacc{db=Db, req=Req},
+        VAcc0 = #vacc{db = Db, req = Req, etag = Etag},
         couch_mrview:query_view(Db, DDoc, ViewName, Args, fun view_cb/2, VAcc0)
     end),
     case is_record(Resp, vacc) of
