@@ -90,8 +90,10 @@ show_etag(#httpd{user_ctx=UserCtx}=Req, Doc, DDoc, More) ->
         nil -> nil;
         Doc -> chttpd:doc_etag(Doc)
     end,
-    chttpd:make_etag({chttpd:doc_etag(DDoc), DocPart, Accept,
-        {UserCtx#user_ctx.name, UserCtx#user_ctx.roles}, More}).
+    Name = UserCtx#user_ctx.name,
+    Roles = UserCtx#user_ctx.roles,
+    Parts = {chttpd:doc_etag(DDoc), Accept, {Name, Roles}, More},
+    chttpd:make_etag(Parts).
 
 % updates a doc based on a request
 % handle_doc_update_req(#httpd{method = 'GET'}=Req, _Db, _DDoc) ->
