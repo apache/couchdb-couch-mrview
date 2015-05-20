@@ -90,9 +90,10 @@ show_etag(#httpd{user_ctx=UserCtx}=Req, Doc, DDoc, More) ->
         nil -> nil;
         Doc -> chttpd:doc_etag(Doc)
     end,
+    QueryPart = lists:usort(chttpd:qs(Req)),
     Name = UserCtx#user_ctx.name,
     Roles = UserCtx#user_ctx.roles,
-    Parts = {chttpd:doc_etag(DDoc), Accept, {Name, Roles}, More},
+    Parts = {chttpd:doc_etag(DDoc), Accept, {Name, Roles}, QueryPart, More},
     chttpd:make_etag(Parts).
 
 % updates a doc based on a request
