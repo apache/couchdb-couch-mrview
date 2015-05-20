@@ -187,12 +187,7 @@ handle_view_list_req(Req, _Db, _DDoc) ->
 handle_view_list(Req, Db, DDoc, LName, VDDoc, VName, Keys) ->
     Args0 = couch_mrview_http:parse_params(Req, Keys),
     ETagFun = fun(BaseSig, Acc0) ->
-        UserCtx = Req#httpd.user_ctx,
-        Name = UserCtx#user_ctx.name,
-        Roles = UserCtx#user_ctx.roles,
-        Accept = chttpd:header_value(Req, "Accept"),
-        Parts = {chttpd:doc_etag(DDoc), Accept, {Name, Roles}},
-        ETag = chttpd:make_etag({BaseSig, Parts}),
+        ETag = show_etag(Req, nil, DDoc, []),
         case chttpd:etag_match(Req, ETag) of
             true -> throw({etag_match, ETag});
             false -> {ok, Acc0#lacc{etag=ETag}}
