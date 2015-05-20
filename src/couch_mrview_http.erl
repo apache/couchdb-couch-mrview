@@ -290,26 +290,16 @@ multi_query_view(Req, Db, DDoc, ViewName, Queries) ->
         QueryArg = parse_params(Query, undefined, Args1),
         couch_mrview_util:validate_args(QueryArg)
     end, Queries),
-    {ok, Resp2} = couch_httpd:etag_maybe(Req, fun() ->
-        VAcc0 = #vacc{db=Db, req=Req, prepend="\r\n"},
-        %% TODO: proper calculation of etag
-        Etag = chttpd:make_etag(),
-        Headers = [{"ETag", Etag}],
-        FirstChunk = "{\"results\":[",
-        {ok, Resp0} = chttpd:start_delayed_json_response(VAcc0#vacc.req, 200, Headers, FirstChunk),
-        VAcc1 = VAcc0#vacc{resp=Resp0},
-        VAcc2 = lists:foldl(fun(Args, Acc0) ->
-            {ok, Acc1} = couch_mrview:query_view(Db, DDoc, ViewName, Args, fun view_cb/2, Acc0),
-            Acc1
-        end, VAcc1, ArgQueries),
-        {ok, Resp1} = chttpd:send_delayed_chunk(VAcc2#vacc.resp, "\r\n]}"),
-        {ok, Resp2} = chttpd:end_delayed_json_response(Resp1),
-        {ok, VAcc2#vacc{resp=Resp2}}
-    end),
-    case is_record(Resp2, vacc) of
-        true -> {ok, Resp2#vacc.resp};
-        _ -> {ok, Resp2}
-    end.
+    VAcc0 = #vacc{db=Db, req=Req, prepend="\r\n"},
+    FirstChunk = "{\"results\":[",
+    {ok, Resp0} = chttpd:start_delayed_json_response(VAcc0#vacc.req, 200, [], FirstChunk),
+    VAcc1 = VAcc0#vacc{resp=Resp0},
+    VAcc2 = lists:foldl(fun(Args, Acc0) ->
+        {ok, Acc1} = couch_mrview:query_view(Db, DDoc, ViewName, Args, fun view_cb/2, Acc0),
+        Acc1
+    end, VAcc1, ArgQueries),
+    {ok, Resp1} = chttpd:send_delayed_chunk(VAcc2#vacc.resp, "\r\n]}"),
+    chttpd:end_delayed_json_response(Resp1).
 
 
 filtered_view_cb({row, Row0}, Acc) ->
