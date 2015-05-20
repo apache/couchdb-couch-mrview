@@ -35,7 +35,7 @@
     view_cb/2,
     row_to_json/1,
     row_to_json/2,
-    check_view_etag/3
+    check_view_etag/4
 ]).
 
 -include_lib("couch/include/couch_db.hrl").
@@ -225,7 +225,7 @@ do_all_docs_req(Req, Db, Keys, NS) ->
     Args0 = parse_params(Req, Keys),
     Args1 = set_namespace(NS, Args0),
     ETagFun = fun(Sig, Acc0) ->
-        check_view_etag(Sig, Acc0, Req)
+        check_view_etag(Sig, Keys, Acc0, Req)
     end,
     Args = Args1#mrargs{preflight_fun=ETagFun},
     {ok, Resp} = couch_httpd:etag_maybe(Req, fun() ->
@@ -270,7 +270,7 @@ get_view_callback(_, _, _) ->
 design_doc_view(Req, Db, DDoc, ViewName, Keys) ->
     Args0 = parse_params(Req, Keys),
     ETagFun = fun(Sig, Acc0) ->
-        check_view_etag(Sig, Acc0, Req)
+        check_view_etag(Sig, Keys, Acc0, Req)
     end,
     Args = Args0#mrargs{preflight_fun=ETagFun},
     {ok, Resp} = couch_httpd:etag_maybe(Req, fun() ->
@@ -541,8 +541,8 @@ parse_pos_int(Val) ->
     end.
 
 
-check_view_etag(Sig, Acc0, Req) ->
-    ETag = chttpd:make_etag(Sig),
+check_view_etag(Sig, Keys, Acc0, Req) ->
+    ETag = chttpd:make_etag({Sig, Keys}),
     case chttpd:etag_match(Req, ETag) of
         true -> throw({etag_match, ETag});
         false -> {ok, Acc0#vacc{etag=ETag}}
