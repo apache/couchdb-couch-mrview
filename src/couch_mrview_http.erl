@@ -315,14 +315,15 @@ filtered_view_cb({row, Row0}, Acc) ->
 filtered_view_cb(Obj, Acc) ->
     view_cb(Obj, Acc).
 
-
 view_cb({meta, Meta}, #vacc{resp=undefined}=Acc) ->
     % Map function starting
-    Headers = append_etag_if_present([], Acc#vacc.etag),
-    {ok, Resp} = chttpd:start_delayed_json_response(Acc#vacc.req, 200, Headers),
+    {ok, Resp} = chttpd:start_delayed_json_response(Acc#vacc.req, 200, []),
     view_cb({meta, Meta}, Acc#vacc{resp=Resp, should_close=true});
-view_cb({meta, Meta}, #vacc{resp=Resp}=Acc) ->
+view_cb({meta, Meta}, #vacc{}=Acc) ->
     % Sending metadata
+    #vacc{req = Req, resp = Resp, etag = PartialEtag} = Acc,
+    Etag = couch_mrview_util:maybe_etag_respond(Req, Meta, PartialEtag),
+    Resp1 = maybe_update_etag(Resp, Etag),
     Parts = case couch_util:get_value(total, Meta) of
         undefined -> [];
         Total -> [io_lib:format("\"total_rows\":~p", [Total])]
@@ -335,8 +336,8 @@ view_cb({meta, Meta}, #vacc{resp=Resp}=Acc) ->
     end ++ ["\"rows\":["],
     Prepend = prepend_val(Acc),
     Chunk = lists:flatten(Prepend ++ "{" ++ string:join(Parts, ",") ++ "\r\n"),
-    {ok, Resp1} = chttpd:send_delayed_chunk(Resp, Chunk),
-    {ok, Acc#vacc{resp=Resp1, prepend=""}};
+    {ok, Resp2} = chttpd:send_delayed_chunk(Resp1, Chunk),
+    {ok, Acc#vacc{resp=Resp2, prepend=""}};
 view_cb({row, Row}, Acc) ->
     % Adding another row
     Chunk = [prepend_val(Acc), row_to_json(Row)],
@@ -362,11 +363,6 @@ view_cb({error, Reason}, #vacc{resp=undefined}=Acc) ->
 view_cb({error, Reason}, #vacc{resp=Resp}=Acc) ->
     {ok, Resp1} = chttpd:send_delayed_error(Resp, Reason),
     {ok, Acc#vacc{resp=Resp1}}.
-
-append_etag_if_present(Headers, undefined) ->
-    Headers;
-append_etag_if_present(Headers, Etag) ->
-    [{"ETag", Etag}|Headers].
 
 prepend_val(#vacc{prepend=Prepend}) ->
     case Prepend of
@@ -553,3 +549,8 @@ parse_json(V) when is_list(V) ->
     ?JSON_DECODE(V);
 parse_json(V) ->
     V.
+
+maybe_update_etag(Resp, undefined) ->
+    Resp;
+maybe_update_etag(Resp, Etag) ->
+    couch_mrview_util:etag_update(Resp, Etag).

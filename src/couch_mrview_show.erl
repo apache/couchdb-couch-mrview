@@ -209,6 +209,8 @@ handle_view_list(Req, Db, DDoc, LName, VDDoc, VName, Keys) ->
 
 
 list_cb({meta, Meta}, #lacc{code=undefined} = Acc) ->
+    #lacc{req = Req, etag = PartialEtag} = Acc,
+    Etag = couch_mrview_util:maybe_etag_respond(Req, Meta, PartialEtag),
     MetaProps = case couch_util:get_value(total, Meta) of
         undefined -> [];
         Total -> [{total_rows, Total}]
@@ -219,7 +221,7 @@ list_cb({meta, Meta}, #lacc{code=undefined} = Acc) ->
         undefined -> [];
         UpdateSeq -> [{update_seq, UpdateSeq}]
     end,
-    start_list_resp({MetaProps}, Acc);
+    start_list_resp({MetaProps}, Acc#lacc{etag = Etag});
 list_cb({row, Row}, #lacc{code=undefined} = Acc) ->
     {ok, NewAcc} = start_list_resp({[]}, Acc),
     send_list_row(Row, NewAcc);
