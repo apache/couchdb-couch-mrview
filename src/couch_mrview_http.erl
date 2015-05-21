@@ -35,7 +35,7 @@
     view_cb/2,
     row_to_json/1,
     row_to_json/2,
-    check_view_etag/3
+    check_view_etag/4
 ]).
 
 -include_lib("couch/include/couch_db.hrl").
@@ -223,13 +223,10 @@ is_public_fields_configured(Db) ->
 
 do_all_docs_req(Req, Db, Keys, NS) ->
     Args0 = parse_params(Req, Keys),
-    Args1 = set_namespace(NS, Args0),
-    ETagFun = fun(Sig, Acc0) ->
-        check_view_etag(Sig, Acc0, Req)
-    end,
-    Args = Args1#mrargs{preflight_fun=ETagFun},
+    Args = set_namespace(NS, Args0),
+    Etag = couch_mrview_util:make_etag(Args, Keys),
     {ok, Resp} = couch_httpd:etag_maybe(Req, fun() ->
-        VAcc0 = #vacc{db=Db, req=Req},
+        VAcc0 = #vacc{db = Db, req = Req, etag = Etag},
         DbName = ?b2l(Db#db.name),
         UsersDbName = config:get("couch_httpd_auth",
                                  "authentication_db",
@@ -268,13 +265,10 @@ get_view_callback(_, _, _) ->
 
 
 design_doc_view(Req, Db, DDoc, ViewName, Keys) ->
-    Args0 = parse_params(Req, Keys),
-    ETagFun = fun(Sig, Acc0) ->
-        check_view_etag(Sig, Acc0, Req)
-    end,
-    Args = Args0#mrargs{preflight_fun=ETagFun},
+    Args = parse_params(Req, Keys),
+    Etag = couch_mrview_util:make_etag(Args, Keys),
     {ok, Resp} = couch_httpd:etag_maybe(Req, fun() ->
-        VAcc0 = #vacc{db=Db, req=Req},
+        VAcc0 = #vacc{db = Db, req = Req, etag = Etag},
         couch_mrview:query_view(Db, DDoc, ViewName, Args, fun view_cb/2, VAcc0)
     end),
     case is_record(Resp, vacc) of
@@ -290,26 +284,16 @@ multi_query_view(Req, Db, DDoc, ViewName, Queries) ->
         QueryArg = parse_params(Query, undefined, Args1),
         couch_mrview_util:validate_args(QueryArg)
     end, Queries),
-    {ok, Resp2} = couch_httpd:etag_maybe(Req, fun() ->
-        VAcc0 = #vacc{db=Db, req=Req, prepend="\r\n"},
-        %% TODO: proper calculation of etag
-        Etag = couch_uuids:new(),
-        Headers = [{"ETag", Etag}],
-        FirstChunk = "{\"results\":[",
-        {ok, Resp0} = chttpd:start_delayed_json_response(VAcc0#vacc.req, 200, Headers, FirstChunk),
-        VAcc1 = VAcc0#vacc{resp=Resp0},
-        VAcc2 = lists:foldl(fun(Args, Acc0) ->
-            {ok, Acc1} = couch_mrview:query_view(Db, DDoc, ViewName, Args, fun view_cb/2, Acc0),
-            Acc1
-        end, VAcc1, ArgQueries),
-        {ok, Resp1} = chttpd:send_delayed_chunk(VAcc2#vacc.resp, "\r\n]}"),
-        {ok, Resp2} = chttpd:end_delayed_json_response(Resp1),
-        {ok, VAcc2#vacc{resp=Resp2}}
-    end),
-    case is_record(Resp2, vacc) of
-        true -> {ok, Resp2#vacc.resp};
-        _ -> {ok, Resp2}
-    end.
+    VAcc0 = #vacc{db=Db, req=Req, prepend="\r\n"},
+    FirstChunk = "{\"results\":[",
+    {ok, Resp0} = chttpd:start_delayed_json_response(VAcc0#vacc.req, 200, [], FirstChunk),
+    VAcc1 = VAcc0#vacc{resp=Resp0},
+    VAcc2 = lists:foldl(fun(Args, Acc0) ->
+        {ok, Acc1} = couch_mrview:query_view(Db, DDoc, ViewName, Args, fun view_cb/2, Acc0),
+        Acc1
+    end, VAcc1, ArgQueries),
+    {ok, Resp1} = chttpd:send_delayed_chunk(VAcc2#vacc.resp, "\r\n]}"),
+    chttpd:end_delayed_json_response(Resp1).
 
 
 filtered_view_cb({row, Row0}, Acc) ->
@@ -325,14 +309,15 @@ filtered_view_cb({row, Row0}, Acc) ->
 filtered_view_cb(Obj, Acc) ->
     view_cb(Obj, Acc).
 
-
 view_cb({meta, Meta}, #vacc{resp=undefined}=Acc) ->
     % Map function starting
-    Headers = [{"ETag", Acc#vacc.etag}],
-    {ok, Resp} = chttpd:start_delayed_json_response(Acc#vacc.req, 200, Headers),
+    {ok, Resp} = chttpd:start_delayed_json_response(Acc#vacc.req, 200, []),
     view_cb({meta, Meta}, Acc#vacc{resp=Resp, should_close=true});
-view_cb({meta, Meta}, #vacc{resp=Resp}=Acc) ->
+view_cb({meta, Meta}, #vacc{}=Acc) ->
     % Sending metadata
+    #vacc{req = Req, resp = Resp, etag = PartialEtag} = Acc,
+    Etag = couch_mrview_util:maybe_etag_respond(Req, Meta, PartialEtag),
+    Resp1 = maybe_update_etag(Resp, Etag),
     Parts = case couch_util:get_value(total, Meta) of
         undefined -> [];
         Total -> [io_lib:format("\"total_rows\":~p", [Total])]
@@ -345,8 +330,8 @@ view_cb({meta, Meta}, #vacc{resp=Resp}=Acc) ->
     end ++ ["\"rows\":["],
     Prepend = prepend_val(Acc),
     Chunk = lists:flatten(Prepend ++ "{" ++ string:join(Parts, ",") ++ "\r\n"),
-    {ok, Resp1} = chttpd:send_delayed_chunk(Resp, Chunk),
-    {ok, Acc#vacc{resp=Resp1, prepend=""}};
+    {ok, Resp2} = chttpd:send_delayed_chunk(Resp1, Chunk),
+    {ok, Acc#vacc{resp=Resp2, prepend=""}};
 view_cb({row, Row}, Acc) ->
     % Adding another row
     Chunk = [prepend_val(Acc), row_to_json(Row)],
@@ -372,7 +357,6 @@ view_cb({error, Reason}, #vacc{resp=undefined}=Acc) ->
 view_cb({error, Reason}, #vacc{resp=Resp}=Acc) ->
     {ok, Resp1} = chttpd:send_delayed_error(Resp, Reason),
     {ok, Acc#vacc{resp=Resp1}}.
-
 
 prepend_val(#vacc{prepend=Prepend}) ->
     case Prepend of
@@ -547,8 +531,8 @@ parse_pos_int(Val) ->
     end.
 
 
-check_view_etag(Sig, Acc0, Req) ->
-    ETag = chttpd:make_etag(Sig),
+check_view_etag(Sig, Keys, Acc0, Req) ->
+    ETag = chttpd:make_etag({Sig, Keys}),
     case chttpd:etag_match(Req, ETag) of
         true -> throw({etag_match, ETag});
         false -> {ok, Acc0#vacc{etag=ETag}}
@@ -559,3 +543,8 @@ parse_json(V) when is_list(V) ->
     ?JSON_DECODE(V);
 parse_json(V) ->
     V.
+
+maybe_update_etag(Resp, undefined) ->
+    Resp;
+maybe_update_etag(Resp, Etag) ->
+    couch_mrview_util:etag_update(Resp, Etag).

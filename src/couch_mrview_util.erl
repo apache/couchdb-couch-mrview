@@ -32,6 +32,9 @@
 -export([changes_key_opts/2]).
 -export([fold_changes/4]).
 -export([to_key_seq/1]).
+-export([maybe_etag_respond/3]).
+-export([make_etag/2]).
+-export([etag_update/2]).
 
 -define(MOD, couch_mrview_index).
 
@@ -1016,3 +1019,26 @@ get_view_queries({Props}) ->
         _ ->
             throw({bad_request, "`queries` member must be a array."})
     end.
+
+maybe_etag_respond(Req, Meta, undefined) ->
+    undefined;
+maybe_etag_respond(Req, Meta, PartialEtag) ->
+    {MetaTerm, _Rest} = proplists:split(Meta, [total, offset, update_seq]),
+    Etag = chttpd:make_etag({MetaTerm, PartialEtag}),
+    case chttpd:etag_match(Req, Etag) of
+        true -> throw({etag_match, Etag});
+        false -> Etag
+    end.
+
+make_etag(Args, Extra) ->
+    QueryArgs = Args#mrargs{
+        preflight_fun=undefined,
+        extra=[]
+    },
+    chttpd:make_etag({Extra, QueryArgs}).
+
+etag_update(Headers, Etag) when is_list(Headers) andalso is_binary(Etag) ->
+    chttpd:replace_header(Headers, "Etag", Etag);
+etag_update(Resp, Etag) when is_binary(Etag) ->
+    Headers = etag_update(chttpd:response_headers(Resp), Etag),
+    chttpd:set_response_headers(Resp, Headers).

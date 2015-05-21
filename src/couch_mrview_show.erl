@@ -16,7 +16,8 @@
     handle_doc_show_req/3,
     handle_doc_update_req/3,
     handle_view_list_req/3,
-    list_cb/2
+    list_cb/2,
+    show_etag/4
 ]).
 
 -include_lib("couch/include/couch_db.hrl").
@@ -90,8 +91,11 @@ show_etag(#httpd{user_ctx=UserCtx}=Req, Doc, DDoc, More) ->
         nil -> nil;
         Doc -> chttpd:doc_etag(Doc)
     end,
-    chttpd:make_etag({chttpd:doc_etag(DDoc), DocPart, Accept,
-        {UserCtx#user_ctx.name, UserCtx#user_ctx.roles}, More}).
+    QueryPart = lists:usort(chttpd:qs(Req)),
+    Name = UserCtx#user_ctx.name,
+    Roles = UserCtx#user_ctx.roles,
+    Parts = {chttpd:doc_etag(DDoc), Accept, {Name, Roles}, QueryPart, More},
+    chttpd:make_etag(Parts).
 
 % updates a doc based on a request
 % handle_doc_update_req(#httpd{method = 'GET'}=Req, _Db, _DDoc) ->
@@ -183,23 +187,16 @@ handle_view_list_req(Req, _Db, _DDoc) ->
 
 
 handle_view_list(Req, Db, DDoc, LName, VDDoc, VName, Keys) ->
-    Args0 = couch_mrview_http:parse_params(Req, Keys),
-    ETagFun = fun(BaseSig, Acc0) ->
-        UserCtx = Req#httpd.user_ctx,
-        Name = UserCtx#user_ctx.name,
-        Roles = UserCtx#user_ctx.roles,
-        Accept = chttpd:header_value(Req, "Accept"),
-        Parts = {chttpd:doc_etag(DDoc), Accept, {Name, Roles}},
-        ETag = chttpd:make_etag({BaseSig, Parts}),
-        case chttpd:etag_match(Req, ETag) of
-            true -> throw({etag_match, ETag});
-            false -> {ok, Acc0#lacc{etag=ETag}}
-        end
-    end,
-    Args = Args0#mrargs{preflight_fun=ETagFun},
+    Args = couch_mrview_http:parse_params(Req, Keys),
+    Etag = show_etag(Req, nil, DDoc, []),
     couch_httpd:etag_maybe(Req, fun() ->
         couch_query_servers:with_ddoc_proc(DDoc, fun(QServer) ->
-            Acc = #lacc{db=Db, req=Req, qserver=QServer, lname=LName},
+            Acc = #lacc{
+                db = Db,
+                req = Req,
+                qserver = QServer,
+                lname = LName,
+                etag = Etag},
             case VName of
               <<"_all_docs">> ->
                 couch_mrview:query_all_docs(Db, Args, fun list_cb/2, Acc);
@@ -211,6 +208,8 @@ handle_view_list(Req, Db, DDoc, LName, VDDoc, VName, Keys) ->
 
 
 list_cb({meta, Meta}, #lacc{code=undefined} = Acc) ->
+    #lacc{req = Req, etag = PartialEtag} = Acc,
+    Etag = couch_mrview_util:maybe_etag_respond(Req, Meta, PartialEtag),
     MetaProps = case couch_util:get_value(total, Meta) of
         undefined -> [];
         Total -> [{total_rows, Total}]
@@ -221,7 +220,7 @@ list_cb({meta, Meta}, #lacc{code=undefined} = Acc) ->
         undefined -> [];
         UpdateSeq -> [{update_seq, UpdateSeq}]
     end,
-    start_list_resp({MetaProps}, Acc);
+    start_list_resp({MetaProps}, Acc#lacc{etag = Etag});
 list_cb({row, Row}, #lacc{code=undefined} = Acc) ->
     {ok, NewAcc} = start_list_resp({[]}, Acc),
     send_list_row(Row, NewAcc);
