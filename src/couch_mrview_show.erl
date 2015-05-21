@@ -186,18 +186,16 @@ handle_view_list_req(Req, _Db, _DDoc) ->
 
 
 handle_view_list(Req, Db, DDoc, LName, VDDoc, VName, Keys) ->
-    Args0 = couch_mrview_http:parse_params(Req, Keys),
-    ETagFun = fun(BaseSig, Acc0) ->
-        ETag = show_etag(Req, nil, DDoc, []),
-        case chttpd:etag_match(Req, ETag) of
-            true -> throw({etag_match, ETag});
-            false -> {ok, Acc0#lacc{etag=ETag}}
-        end
-    end,
-    Args = Args0#mrargs{preflight_fun=ETagFun},
+    Args = couch_mrview_http:parse_params(Req, Keys),
+    Etag = show_etag(Req, nil, DDoc, []),
     couch_httpd:etag_maybe(Req, fun() ->
         couch_query_servers:with_ddoc_proc(DDoc, fun(QServer) ->
-            Acc = #lacc{db=Db, req=Req, qserver=QServer, lname=LName},
+            Acc = #lacc{
+                db = Db,
+                req = Req,
+                qserver = QServer,
+                lname = LName,
+                etag = Etag},
             case VName of
               <<"_all_docs">> ->
                 couch_mrview:query_all_docs(Db, Args, fun list_cb/2, Acc);

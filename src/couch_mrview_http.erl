@@ -223,13 +223,10 @@ is_public_fields_configured(Db) ->
 
 do_all_docs_req(Req, Db, Keys, NS) ->
     Args0 = parse_params(Req, Keys),
-    Args1 = set_namespace(NS, Args0),
-    ETagFun = fun(Sig, Acc0) ->
-        check_view_etag(Sig, Keys, Acc0, Req)
-    end,
-    Args = Args1#mrargs{preflight_fun=ETagFun},
+    Args = set_namespace(NS, Args0),
+    Etag = couch_mrview_util:make_etag(Args, Keys),
     {ok, Resp} = couch_httpd:etag_maybe(Req, fun() ->
-        VAcc0 = #vacc{db=Db, req=Req},
+        VAcc0 = #vacc{db = Db, req = Req, etag = Etag},
         DbName = ?b2l(Db#db.name),
         UsersDbName = config:get("couch_httpd_auth",
                                  "authentication_db",
@@ -268,11 +265,7 @@ get_view_callback(_, _, _) ->
 
 
 design_doc_view(Req, Db, DDoc, ViewName, Keys) ->
-    Args0 = parse_params(Req, Keys),
-    ETagFun = fun(Sig, Acc0) ->
-        check_view_etag(Sig, Keys, Acc0, Req)
-    end,
-    Args = Args0#mrargs{preflight_fun=ETagFun},
+    Args = parse_params(Req, Keys),
     Etag = couch_mrview_util:make_etag(Args, Keys),
     {ok, Resp} = couch_httpd:etag_maybe(Req, fun() ->
         VAcc0 = #vacc{db = Db, req = Req, etag = Etag},
