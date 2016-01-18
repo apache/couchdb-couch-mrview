@@ -254,7 +254,7 @@ init_state(Db, Fd, State, Header) ->
 
 open_view(Db, Fd, Lang, ViewState, View) ->
     ReduceFun = make_reduce_fun(Lang, View#mrview.reduce_funs),
-    LessFun = make_less_fun(View),
+    LessFun = maybe_define_less_fun(View),
     Compression = couch_db:compression(Db),
     BTState = get_key_btree_state(ViewState),
     ViewBtOpts = [
@@ -1008,9 +1008,9 @@ make_reduce_fun(Lang, ReduceFuns) ->
     end.
 
 
-make_less_fun(#mrview{options = Options}) ->
+maybe_define_less_fun(#mrview{options = Options}) ->
     case couch_util:get_value(<<"collation">>, Options) of
-        <<"raw">> -> fun(A, B) -> A < B end;
+        <<"raw">> -> undefined;
         _ -> fun couch_ejson_compare:less_json_ids/2
     end.
 
