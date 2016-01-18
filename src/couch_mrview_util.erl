@@ -323,7 +323,7 @@ all_docs_reduce_to_count(Reductions) ->
 reduce_to_count(nil) ->
     0;
 reduce_to_count(Reductions) ->
-    CountsReduceFun = make_counts_reduce_fun(),
+    CountsReduceFun = fun counts_reduce/2,
     FinalReduction = couch_btree:final_reduce(CountsReduceFun, Reductions),
     get_counts(FinalReduction).
 
@@ -1015,22 +1015,19 @@ make_less_fun(#mrview{options = Options}) ->
     end.
 
 
-make_counts_reduce_fun() ->
-    fun
-        (reduce, KVs) ->
-            CountFun = fun
-                ({_, {dups, Vals}}, Acc) -> Acc + length(Vals);
-                (_, Acc) -> Acc + 1
-            end,
-            Counts = lists:foldl(CountFun, 0, KVs),
-            {Counts, []};
-        (rereduce, Reds) ->
-            CountFun = fun(Red, Acc) ->
-                Acc + get_counts(Red)
-            end,
-            Counts = lists:foldl(CountFun, 0, Reds),
-            {Counts, []}
-    end.
+counts_reduce(reduce, KVs) ->
+    CountFun = fun
+        ({_, {dups, Vals}}, Acc) -> Acc + length(Vals);
+        (_, Acc) -> Acc + 1
+    end,
+    Counts = lists:foldl(CountFun, 0, KVs),
+    {Counts, []};
+counts_reduce(rereduce, Reds) ->
+    CountFun = fun(Red, Acc) ->
+        Acc + get_counts(Red)
+    end,
+    Counts = lists:foldl(CountFun, 0, Reds),
+    {Counts, []}.
 
 
 make_user_reds_reduce_fun(Lang, ReduceFuns, NthRed) ->
