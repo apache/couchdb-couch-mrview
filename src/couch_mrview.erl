@@ -413,8 +413,13 @@ all_docs_fold(Db, #mrargs{keys=undefined}=Args, Callback, UAcc) ->
         update_seq=UpdateSeq,
         args=Args
     },
-    [Opts] = couch_mrview_util:all_docs_key_opts(Args),
-    {ok, Offset, FinalAcc} = couch_db:enum_docs(Db, fun map_fold/3, Acc, Opts),
+    [Opts1] = couch_mrview_util:all_docs_key_opts(Args),
+    % TODO: This is a terrible hack for now. We'll probably have
+    % to rewrite _all_docs to not be part of mrview and not expect
+    % a btree. For now non-btree's will just have to pass 0 or
+    % some fake reductions to get an offset.
+    Opts2 = [include_reductions | Opts1],
+    {ok, Offset, FinalAcc} = couch_db:fold_docs(Db, fun map_fold/3, Acc, Opts2),
     finish_fold(FinalAcc, [{total, Total}, {offset, Offset}]);
 all_docs_fold(Db, #mrargs{direction=Dir, keys=Keys0}=Args, Callback, UAcc) ->
     {ok, Info} = couch_db:get_db_info(Db),
