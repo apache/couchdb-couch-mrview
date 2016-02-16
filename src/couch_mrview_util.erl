@@ -615,7 +615,7 @@ delete_file(FName) ->
     case filelib:is_file(FName) of
         true ->
             RootDir = couch_index_util:root_dir(),
-            couch_file:delete(RootDir, FName);
+            couch_server:delete_file(RootDir, FName);
         _ ->
             ok
     end.

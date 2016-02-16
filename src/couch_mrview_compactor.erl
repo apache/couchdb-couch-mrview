@@ -258,10 +258,9 @@ swap_compacted(OldState, NewState) ->
     RootDir = couch_index_util:root_dir(),
     IndexFName = couch_mrview_util:index_file(DbName, Sig),
     CompactFName = couch_mrview_util:compaction_file(DbName, Sig),
-    ok = couch_file:delete(RootDir, IndexFName),
+    {ok, _} = couch_server:delete_file(RootDir, IndexFName),
     ok = file:rename(CompactFName, IndexFName),
 
     unlink(OldState#mrst.fd),
     erlang:demonitor(OldState#mrst.fd_monitor, [flush]),
-    
     {ok, NewState#mrst{fd_monitor=Ref}}.
