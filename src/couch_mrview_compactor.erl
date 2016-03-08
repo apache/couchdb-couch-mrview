@@ -258,7 +258,7 @@ swap_compacted(OldState, NewState) ->
     RootDir = couch_index_util:root_dir(),
     IndexFName = couch_mrview_util:index_file(DbName, Sig),
     CompactFName = couch_mrview_util:compaction_file(DbName, Sig),
-    {ok, _} = couch_server:delete_file(RootDir, IndexFName),
+    {ok, _} = couch_server:delete_file(RootDir, IndexFName, [compaction]),
     ok = file:rename(CompactFName, IndexFName),
 
     unlink(OldState#mrst.fd),
