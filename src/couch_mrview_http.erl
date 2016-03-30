@@ -343,13 +343,16 @@ view_cb({meta, Meta}, #vacc{}=Acc) ->
     % Sending metadata
     Parts = case couch_util:get_value(total, Meta) of
         undefined -> [];
-        Total -> [io_lib:format("\"total_rows\":~p", [Total])]
+        Total -> [io_lib:format("\"total_rows\":~B", [Total])]
     end ++ case couch_util:get_value(offset, Meta) of
         undefined -> [];
-        Offset -> [io_lib:format("\"offset\":~p", [Offset])]
+        Offset -> [io_lib:format("\"offset\":~B", [Offset])]
     end ++ case couch_util:get_value(update_seq, Meta) of
         undefined -> [];
-        UpdateSeq -> [io_lib:format("\"update_seq\":~p", [UpdateSeq])]
+        UpdateSeq when is_integer(UpdateSeq) ->
+            [io_lib:format("\"update_seq\":~B", [UpdateSeq])];
+        UpdateSeq when is_binary(UpdateSeq) ->
+            [io_lib:format("\"update_seq\":\"~s\"", [UpdateSeq])]
     end ++ ["\"rows\":["],
     Chunk = [prepend_val(Acc), "{", string:join(Parts, ","), "\r\n"],
     {ok, AccOut} = maybe_flush_response(Acc, Chunk, iolist_size(Chunk)),
