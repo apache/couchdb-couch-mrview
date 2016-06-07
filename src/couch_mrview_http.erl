@@ -576,6 +576,9 @@ check_view_etag(Sig, Acc0, Req) ->
 
 
 parse_json(V) when is_list(V) ->
-    ?JSON_DECODE(V);
+    case lists:all(fun is_binary/1, V) of
+        true -> V;
+        false -> ?JSON_DECODE(V)
+    end;
 parse_json(V) ->
     V.
