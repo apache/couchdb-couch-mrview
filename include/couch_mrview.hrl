@@ -95,6 +95,7 @@
     resp,
     prepend,
     etag,
+    meta,
     should_close = false,
     buffer = [],
     bufsize = 0,

@@ -339,6 +339,14 @@ view_cb({meta, Meta}, #vacc{resp=undefined}=Acc) ->
     Headers = [],
     {ok, Resp} = chttpd:start_delayed_json_response(Acc#vacc.req, 200, Headers),
     view_cb({meta, Meta}, Acc#vacc{resp=Resp, should_close=true});
+view_cb({row, Row}, #vacc{resp=undefined}=Acc) ->
+    % sorted=false view start
+    Headers = [],
+    {ok, Resp} = chttpd:start_delayed_json_response(Acc#vacc.req, 200, Headers, "{\"rows\":[\r\n"),
+    view_cb({row, Row}, Acc#vacc{resp=Resp, should_close=true});
+view_cb({unsorted_meta, Meta}, #vacc{}=Acc) ->
+    %% TODO:: append total_rows upon view completion
+    {ok, Acc#vacc{meta=Meta}};
 view_cb({meta, Meta}, #vacc{}=Acc) ->
     % Sending metadata
     Parts = case couch_util:get_value(total, Meta) of
