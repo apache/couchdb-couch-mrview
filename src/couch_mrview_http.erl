@@ -360,12 +360,16 @@ view_cb({meta, Meta}, #vacc{}=Acc) ->
     end ++ ["\"rows\":["],
     Chunk = [prepend_val(Acc), "{", string:join(Parts, ","), "\r\n"],
     {ok, AccOut} = maybe_flush_response(Acc, Chunk, iolist_size(Chunk)),
-    {ok, AccOut#vacc{prepend=""}};
+    {ok, AccOut#vacc{prepend="", meta_sent=true}};
 view_cb({row, Row}, #vacc{resp=undefined}=Acc) ->
-    % sorted=false and a row arrived before meta, start response.
+    % sorted=false and a row arrived before meta, and response hasn't started
     Pre = "{\"rows\":[\r\n",
     {ok, Resp} = chttpd:start_delayed_json_response(Acc#vacc.req, 200, []),
-    view_cb({row, Row}, Acc#vacc{row_sent=true,resp=Resp, prepend=Pre, should_close=true});
+    view_cb({row, Row}, Acc#vacc{resp=Resp, row_sent=true, prepend=Pre, should_close=true});
+view_cb({row, Row}, #vacc{row_sent=false, meta_sent=false}=Acc) ->
+    % sorted=false and a row arrived before meta, emit a no-meta "rows:" header
+    Pre = prepend_val(Acc) ++ "{\"rows\":[\r\n",
+    view_cb({row, Row}, Acc#vacc{row_sent=true, prepend=Pre});
 view_cb({row, Row}, Acc) ->
     % Adding another row
     Chunk = [prepend_val(Acc), row_to_json(Row)],
@@ -373,16 +377,17 @@ view_cb({row, Row}, Acc) ->
 view_cb(complete, #vacc{resp=undefined}=Acc) ->
     % Nothing in view
     {ok, Resp} = chttpd:send_json(Acc#vacc.req, 200, {[{rows, []}]}),
-    {ok, Acc#vacc{resp=Resp}};
+    {ok, Acc#vacc{resp=Resp, row_sent=false, meta_sent=false}};
 view_cb(complete, #vacc{resp=Resp, buffer=Buf, threshold=Max}=Acc) ->
     % Finish view output and possibly end the response
     {ok, Resp1} = chttpd:close_delayed_json_object(Resp, Buf, "\r\n]}", Max),
-    case Acc#vacc.should_close of
+    Acc1 = Acc#vacc{row_sent=false, meta_sent=false},
+    case Acc1#vacc.should_close of
         true ->
             {ok, Resp2} = chttpd:end_delayed_json_response(Resp1),
-            {ok, Acc#vacc{resp=Resp2}};
+            {ok, Acc1#vacc{resp=Resp2}};
         _ ->
-            {ok, Acc#vacc{resp=Resp1, prepend=",\r\n", buffer=[], bufsize=0}}
+            {ok, Acc1#vacc{resp=Resp1, prepend=",\r\n", buffer=[], bufsize=0}}
     end;
 view_cb({error, Reason}, #vacc{resp=undefined}=Acc) ->
     {ok, Resp} = chttpd:send_error(Acc#vacc.req, Reason),
