@@ -474,7 +474,7 @@ parse_params(Props, Keys, #mrargs{}=Args0, Options) ->
     end, Args1, Props),
     Limit = Args2#mrargs.limit,
     MaxLimit = config:get_integer("couch_db", "max_query_limit",
-        16#10000000),
+        ?MAX_QUERY_LIMIT),
     Args2#mrargs{limit=min(Limit, MaxLimit)}.
 
 
