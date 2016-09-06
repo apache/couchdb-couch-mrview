@@ -10,7 +10,7 @@
 % License for the specific language governing permissions and limitations under
 % the License.
 
--define(MAX_QUERY_LIMIT, 16#10000000).
+-define(DEFAULT_LIMIT, 16#10000000).
 
 -record(mrst, {
     sig=nil,
@@ -75,7 +75,7 @@
     keys,
 
     direction = fwd,
-    limit = ?MAX_QUERY_LIMIT,
+    limit = ?DEFAULT_LIMIT,
     skip = 0,
     group_level = 0,
     group = undefined,
