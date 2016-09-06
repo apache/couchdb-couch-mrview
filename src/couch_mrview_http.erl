@@ -473,10 +473,12 @@ parse_params(Props, Keys, #mrargs{}=Args0, Options) ->
         parse_param(K, V, Acc, IsDecoded)
     end, Args1, Props),
     Limit = Args2#mrargs.limit,
-    MaxLimit = config:get_integer("couch_db", "max_query_limit",
-        ?MAX_QUERY_LIMIT),
-    Args2#mrargs{limit=min(Limit, MaxLimit)}.
-
+    case config:get_integer("couch_db", " default_query_limit", -1) of
+        ConfigDefault0 when ConfigDefault0 < 1 ->
+            Args2;
+        ConfigDefault1 ->
+            Args2#mrargs{limit=min(Limit, ConfigDefault1)}
+    end.
 
 parse_param(Key, Val, Args, IsDecoded) when is_binary(Key) ->
     parse_param(binary_to_list(Key), Val, Args, IsDecoded);
