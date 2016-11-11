@@ -61,6 +61,7 @@
 
 
 -record(mrargs, {
+    vsn = 1,
     view_type,
     reduce,
 
