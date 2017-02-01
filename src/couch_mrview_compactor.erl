@@ -52,10 +52,7 @@ compact(State) ->
         CompactFName = couch_mrview_util:compaction_file(DbName, Sig),
         {ok, Fd} = couch_mrview_util:open_file(CompactFName),
         ESt = couch_mrview_util:reset_index(Db, Fd, State),
-
-        {ok, DbReduce} = couch_btree:full_reduce(Db#db.id_tree),
-        Count = element(1, DbReduce),
-
+        {ok, Count} = couch_db:get_doc_count(Db),
         {ESt, Count}
     end),
 
@@ -290,7 +287,7 @@ swap_compacted(OldState, NewState) ->
 
     unlink(OldState#mrst.fd),
     erlang:demonitor(OldState#mrst.fd_monitor, [flush]),
-    
+
     {ok, NewState#mrst{fd_monitor=Ref}}.
 
 
