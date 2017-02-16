@@ -14,6 +14,7 @@
 
 -include_lib("couch/include/couch_eunit.hrl").
 -include_lib("couch/include/couch_db.hrl").
+-include_lib("couch_mrview/include/couch_mrview.hrl").
 
 -define(TIMEOUT, 1000).
 
@@ -46,62 +47,72 @@ view_purge_test_() ->
 
 
 test_purge_single(Db) ->
-    Result = run_query(Db, []),
-    Expect = {ok, [
-        {meta, [{total, 5}, {offset, 0}]},
-        {row, [{id, <<"1">>}, {key, 1}, {value, 1}]},
-        {row, [{id, <<"2">>}, {key, 2}, {value, 2}]},
-        {row, [{id, <<"3">>}, {key, 3}, {value, 3}]},
-        {row, [{id, <<"4">>}, {key, 4}, {value, 4}]},
-        {row, [{id, <<"5">>}, {key, 5}, {value, 5}]}
-    ]},
-    ?_assertEqual(Expect, Result),
+    ?_test(begin
+        Result = run_query(Db, []),
+        Expect = {ok, [
+            {meta, [{total, 5}, {offset, 0}]},
+            {row, [{id, <<"1">>}, {key, 1}, {value, 1}]},
+            {row, [{id, <<"2">>}, {key, 2}, {value, 2}]},
+            {row, [{id, <<"3">>}, {key, 3}, {value, 3}]},
+            {row, [{id, <<"4">>}, {key, 4}, {value, 4}]},
+            {row, [{id, <<"5">>}, {key, 5}, {value, 5}]}
+        ]},
+        ?assertEqual(Expect, Result),
 
-    FDI = couch_db:get_full_doc_info(Db, <<"1">>),
-    Rev = get_rev(FDI),
-    {ok, {_, _}} = couch_db:purge_docs(Db, [{<<"1">>, [Rev]}]),
-    {ok, Db2} = couch_db:reopen(Db),
+        FDI = couch_db:get_full_doc_info(Db, <<"1">>),
+        Rev = get_rev(FDI),
+        {ok, {_, _}} = couch_db:purge_docs(Db, [{<<"UUID1">>, <<"1">>, [Rev]}]),
+        {ok, Db2} = couch_db:reopen(Db),
 
-    Result2 = run_query(Db2, []),
-    Expect2 = {ok, [
-        {meta, [{total, 4}, {offset, 0}]},
-        {row, [{id, <<"2">>}, {key, 2}, {value, 2}]},
-        {row, [{id, <<"3">>}, {key, 3}, {value, 3}]},
-        {row, [{id, <<"4">>}, {key, 4}, {value, 4}]},
-        {row, [{id, <<"5">>}, {key, 5}, {value, 5}]}
-    ]},
-    ?_assertEqual(Expect2, Result2).
+        Result2 = run_query(Db2, []),
+        Expect2 = {ok, [
+            {meta, [{total, 4}, {offset, 0}]},
+            {row, [{id, <<"2">>}, {key, 2}, {value, 2}]},
+            {row, [{id, <<"3">>}, {key, 3}, {value, 3}]},
+            {row, [{id, <<"4">>}, {key, 4}, {value, 4}]},
+            {row, [{id, <<"5">>}, {key, 5}, {value, 5}]}
+        ]},
+        ?assertEqual(Expect2, Result2),
+
+        ok
+    end).
 
 
 test_purge_multiple(Db) ->
-    Result = run_query(Db, []),
-    Expect = {ok, [
-        {meta, [{total, 5}, {offset, 0}]},
-        {row, [{id, <<"1">>}, {key, 1}, {value, 1}]},
-        {row, [{id, <<"2">>}, {key, 2}, {value, 2}]},
-        {row, [{id, <<"3">>}, {key, 3}, {value, 3}]},
-        {row, [{id, <<"4">>}, {key, 4}, {value, 4}]},
-        {row, [{id, <<"5">>}, {key, 5}, {value, 5}]}
-    ]},
-    ?_assertEqual(Expect, Result),
+    ?_test(begin
+        Result = run_query(Db, []),
+        Expect = {ok, [
+            {meta, [{total, 5}, {offset, 0}]},
+            {row, [{id, <<"1">>}, {key, 1}, {value, 1}]},
+            {row, [{id, <<"2">>}, {key, 2}, {value, 2}]},
+            {row, [{id, <<"3">>}, {key, 3}, {value, 3}]},
+            {row, [{id, <<"4">>}, {key, 4}, {value, 4}]},
+            {row, [{id, <<"5">>}, {key, 5}, {value, 5}]}
+        ]},
+        ?assertEqual(Expect, Result),
 
-    % 1st purge request
-    FDI1 = couch_db:get_full_doc_info(Db, <<"1">>), Rev1 = get_rev(FDI1),
-    FDI2 = couch_db:get_full_doc_info(Db, <<"2">>), Rev2 = get_rev(FDI2),
-    FDI5 = couch_db:get_full_doc_info(Db, <<"5">>), Rev5 = get_rev(FDI5),
+        FDI1 = couch_db:get_full_doc_info(Db, <<"1">>), Rev1 = get_rev(FDI1),
+        FDI2 = couch_db:get_full_doc_info(Db, <<"2">>), Rev2 = get_rev(FDI2),
+        FDI5 = couch_db:get_full_doc_info(Db, <<"5">>), Rev5 = get_rev(FDI5),
 
-    IdsRevs = [{<<"1">>, [Rev1]}, {<<"2">>, [Rev2]}, {<<"5">>, [Rev5]}],
-    {ok, {_, _}} = couch_db:purge_docs(Db, IdsRevs),
-    {ok, Db2} = couch_db:reopen(Db),
+        IdsRevs = [
+            {<<"UUID1">>, <<"1">>, [Rev1]},
+            {<<"UUID2">>, <<"2">>, [Rev2]},
+            {<<"UUID5">>, <<"5">>, [Rev5]}
+        ],
+        {ok, {_, _}} = couch_db:purge_docs(Db, IdsRevs),
+        {ok, Db2} = couch_db:reopen(Db),
 
-    Result2 = run_query(Db2, []),
-    Expect2 = {ok, [
-        {meta, [{total, 2}, {offset, 0}]},
-        {row, [{id, <<"3">>}, {key, 3}, {value, 3}]},
-        {row, [{id, <<"4">>}, {key, 4}, {value, 4}]}
-    ]},
-    ?_assertEqual(Expect2, Result2).
+        Result2 = run_query(Db2, []),
+        Expect2 = {ok, [
+            {meta, [{total, 2}, {offset, 0}]},
+            {row, [{id, <<"3">>}, {key, 3}, {value, 3}]},
+            {row, [{id, <<"4">>}, {key, 4}, {value, 4}]}
+        ]},
+        ?assertEqual(Expect2, Result2),
 
+        ok
+    end).
 
 run_query(Db, Opts) ->
     couch_mrview:query_view(Db, <<"_design/bar">>, <<"baz">>, Opts).

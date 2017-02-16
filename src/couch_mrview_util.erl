@@ -12,6 +12,8 @@
 
 -module(couch_mrview_util).
 
+-export([get_local_purge_doc_id/1, get_value_from_options/2]).
+-export([get_signature_from_filename/1]).
 -export([get_view/4]).
 -export([ddoc_to_mrst/2, init_state/4, reset_index/3]).
 -export([make_header/1]).
@@ -37,6 +39,26 @@
 
 -include_lib("couch/include/couch_db.hrl").
 -include_lib("couch_mrview/include/couch_mrview.hrl").
+
+
+get_local_purge_doc_id(Sig) ->
+    list_to_binary(?LOCAL_DOC_PREFIX ++ "purge-mrview-" ++ Sig).
+
+
+get_value_from_options(Key, Options) ->
+    case couch_util:get_value(Key, Options) of
+        undefined ->
+            Reason = binary_to_list(Key) ++ " must exist in Options.",
+            throw({bad_request, Reason});
+        Value -> Value
+    end.
+
+
+get_signature_from_filename(FileName) ->
+    FilePathList = filename:split(FileName),
+    [PureFN] = lists:nthtail(length(FilePathList) - 1, FilePathList),
+    PureFNExt = filename:extension(PureFN),
+    filename:basename(PureFN, PureFNExt).
 
 
 get_view(Db, DDoc, ViewName, Args0) ->
