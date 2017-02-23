@@ -411,6 +411,12 @@ row_to_json(Row) ->
     row_to_json(Id, Row).
 
 
+row_to_json(builtin_reduce_error, Row) ->
+    Value = couch_util:get_value(value, Row),
+    Reason = couch_util:get_value(reason, Row),
+    Obj = {[{error, builtin_reduce_error}, {reason, Reason},
+        {cause_by, Value}]},
+    ?JSON_ENCODE(Obj);
 row_to_json(error, Row) ->
     % Special case for _all_docs request with KEYS to
     % match prior behavior.
