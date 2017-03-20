@@ -229,24 +229,39 @@ update_local_purge_doc(Db, State) ->
 
 
 verify_index_exists(Options) ->
-    ShardDbName = couch_mrview_util:get_value_from_options(<<"dbname">>, Options),
-    DDocId = couch_mrview_util:get_value_from_options(<<"ddoc_id">>, Options),
-    SigInLocal = couch_mrview_util:get_value_from_options(<<"signature">>, Options),
+    ShardDbName = couch_mrview_util:get_value_from_options(
+        <<"dbname">>,
+        Options
+    ),
+    DDocId = couch_mrview_util:get_value_from_options(
+        <<"ddoc_id">>,
+        Options
+    ),
+    SigInLocal = couch_mrview_util:get_value_from_options(
+        <<"signature">>,
+        Options
+    ),
     case couch_db:open_int(ShardDbName, []) of
         {ok, Db} ->
             try
                 DbName = mem3:dbname(couch_db:name(Db)),
                 case ddoc_cache:open(DbName, DDocId) of
                     {ok, DDoc} ->
-                        {ok, IdxState} = couch_mrview_util:ddoc_to_mrst(ShardDbName, DDoc),
-                        couch_index_util:hexsig(IdxState#mrst.sig) == SigInLocal;
+                        {ok, IdxState} = couch_mrview_util:ddoc_to_mrst(
+                            ShardDbName,
+                            DDoc
+                        ),
+                        IdxSig = IdxState#mrst.sig,
+                        couch_index_util:hexsig(IdxSig) == SigInLocal;
                     _Else ->
                         false
                 end
             catch E:T ->
                 Stack = erlang:get_stacktrace(),
-                couch_log:error("Error occurs when verifying existence of ~s/~s :: ~p ~p",
-                    [ShardDbName, DDocId, {E, T}, Stack]),
+                couch_log:error(
+                    "Error occurs when verifying existence of ~s/~s :: ~p ~p",
+                    [ShardDbName, DDocId, {E, T}, Stack]
+                ),
                 false
             after
                 catch couch_db:close(Db)
