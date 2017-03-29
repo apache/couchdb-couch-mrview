@@ -44,6 +44,11 @@ save_docs(Db, Docs) ->
 make_docs(Count) ->
     [doc(I) || I <- lists:seq(1, Count)].
 
+
+make_docs(Since, Count) ->
+    [doc(I) || I <- lists:seq(Since, Count)].
+
+
 ddoc(changes) ->
     couch_doc:from_json_obj({[
         {<<"_id">>, <<"_design/bar">>},
