@@ -94,6 +94,15 @@ should_map_with_limit_and_skip(Db) ->
     ]},
     ?_assertEqual(Expect, Result).
 
+should_map_with_config_limit(Db) ->
+    ok = config:set("couch_db", "max_query_limit", 1),
+    Result = run_query(Db, []),
+    Expect = {ok, [
+        {meta, [{total, 1}, {offset, 0}]},
+        {row, [{id, <<"1">>}, {key, 1}, {value, 1}]}
+    ]},
+    ?_assertEqual(Expect, Result).
+
 should_map_with_include_docs(Db) ->
     Result = run_query(Db, [
         {start_key, 8},

@@ -469,10 +469,16 @@ parse_params(Props, Keys, #mrargs{}=Args0, Options) ->
     IsDecoded = lists:member(decoded, Options),
     % group_level set to undefined to detect if explicitly set by user
     Args1 = Args0#mrargs{keys=Keys, group=undefined, group_level=undefined},
-    lists:foldl(fun({K, V}, Acc) ->
+    Args2 = lists:foldl(fun({K, V}, Acc) ->
         parse_param(K, V, Acc, IsDecoded)
-    end, Args1, Props).
-
+    end, Args1, Props),
+    Limit = Args2#mrargs.limit,
+    case config:get_integer("couch_db", " default_query_limit", -1) of
+        ConfigDefault0 when ConfigDefault0 < 1 ->
+            Args2;
+        ConfigDefault1 ->
+            Args2#mrargs{limit=min(Limit, ConfigDefault1)}
+    end.
 
 parse_param(Key, Val, Args, IsDecoded) when is_binary(Key) ->
     parse_param(binary_to_list(Key), Val, Args, IsDecoded);

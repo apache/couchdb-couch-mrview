@@ -107,6 +107,21 @@ should_query_with_limit_and_skip(Db) ->
     ]},
     ?_assertEqual(Expect, Result).
 
+should_query_with_config_limit_and_skip(Db) ->
+    ok = config:set("couch_db", "max_query_limit", 3),
+    Result = run_query(Db, [
+        {start_key, <<"2">>},
+        {limit, 6},
+        {skip, 3}
+    ]),
+    Expect = {ok, [
+        {meta, [{total, 11}, {offset, 5}]},
+        mk_row(<<"5">>, <<"1-aaac5d460fd40f9286e57b9bf12e23d2">>),
+        mk_row(<<"6">>, <<"1-aca21c2e7bc5f8951424fcfc5d1209d8">>),
+        mk_row(<<"7">>, <<"1-4374aeec17590d82f16e70f318116ad9">>)
+    ]},
+    ?_assertEqual(Expect, Result).
+
 should_query_with_include_docs(Db) ->
     Result = run_query(Db, [
         {start_key, <<"8">>},
