@@ -568,10 +568,46 @@ parse_param(Key, Val, Args, IsDecoded) ->
             false ->
                 Args
             end;
+        "revs_info" ->
+            case parse_boolean(Val) of
+            true ->
+                Opts = Args#mrargs.doc_options,
+                Args#mrargs{doc_options=[revs_info|Opts]};
+            false ->
+                Args
+            end;
+        "deleted_conflicts" ->
+            case parse_boolean(Val) of
+            true ->
+                Opts = Args#mrargs.doc_options,
+                Args#mrargs{doc_options=[deleted_conflicts|Opts]};
+            false ->
+                Args
+            end;
+        "meta" ->
+            case parse_boolean(Val) of
+            true ->
+                Opts0 = Args#mrargs.doc_options,
+                Opts1 = [revs_info, conflicts, deleted_conflicts|Opts0],
+                Args#mrargs{doc_options=Opts1};
+            false ->
+                Args
+            end;
+        "r" ->
+            Opts = Args#mrargs.doc_options,
+            Args#mrargs{doc_options=[{r, Val}|Opts]};
         "update_seq" ->
             Args#mrargs{update_seq=parse_boolean(Val)};
         "conflicts" ->
-            Args#mrargs{conflicts=parse_boolean(Val)};
+            case parse_boolean(Val) of
+            true ->
+                Args#mrargs{
+                    conflicts=true,
+                    doc_options=[conflicts|Args#mrargs.doc_options]
+                };
+            false ->
+                Args#mrargs{conflicts=false}
+            end;
         "callback" ->
             Args#mrargs{callback=couch_util:to_binary(Val)};
         "sorted" ->
