@@ -290,7 +290,8 @@ swap_compacted(OldState, NewState) ->
 
     unlink(OldState#mrst.fd),
     erlang:demonitor(OldState#mrst.fd_monitor, [flush]),
-    
+    couch_file:close(OldState#mrst.fd),
+
     {ok, NewState#mrst{fd_monitor=Ref}}.
 
 
