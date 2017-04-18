@@ -619,18 +619,18 @@ delete_files(DbName, Sig) ->
 
 
 delete_index_file(DbName, Sig) ->
-    delete_file(index_file(DbName, Sig)).
+    delete_file(index_file(DbName, Sig), []).
 
 
 delete_compaction_file(DbName, Sig) ->
-    delete_file(compaction_file(DbName, Sig)).
+    delete_file(compaction_file(DbName, Sig), [compaction]).
 
 
-delete_file(FName) ->
+delete_file(FName, Opts) ->
     case filelib:is_file(FName) of
         true ->
             RootDir = couch_index_util:root_dir(),
-            couch_file:delete(RootDir, FName);
+            couch_server:delete_file(RootDir, FName, Opts);
         _ ->
             ok
     end.
