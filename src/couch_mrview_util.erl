@@ -32,6 +32,10 @@
 -export([changes_key_opts/2]).
 -export([fold_changes/4]).
 -export([to_key_seq/1]).
+-export([convert_record/1, convert_record/3]).
+-export([record_vsn/1]).
+
+-define(STALE_POS, 15).
 
 -define(MOD, couch_mrview_index).
 
@@ -868,6 +872,47 @@ mrverror(Mesg) ->
 
 to_key_seq(L) ->
     [{{[Key, Seq], DocId}, {Val, Rev}} || {{Seq, Key}, {DocId, Val, Rev}} <- L].
+
+convert_record(#mrargs{} = Args) ->
+    Args;
+convert_record(Record) when is_tuple(Record) ->
+    convert_record(
+        record_vsn(Record), record_vsn(#mrargs{}), Record).
+
+convert_record(VSN, VSN, Record) ->
+    Record;
+convert_record(From, To, Record) when From < To ->
+    Upgraded = upgrade_record(element(1, Record), From, To, Record),
+    convert_record(record_vsn(Upgraded), To, Upgraded);
+convert_record(From, To, Record) ->
+    Downgraded = downgrade_record(element(1, Record), From, To, Record),
+    convert_record(record_vsn(Downgraded), To, Downgraded).
+
+upgrade_record(mrargs, -1, _, Record0) -> %% Replacing `stale` with `stable` and `update`
+    Record1 = erlang:insert_element(?STALE_POS + 1, Record0, true),
+    erlang:setelement(?STALE_POS, Record1, false);
+upgrade_record(mrargs, 0, _, Record) -> %% Adding vsn field
+    couch_util:record_to_versioned(Record);
+upgrade_record(RecordName, From, To, Record) ->
+    error({missing_migration_for_record,
+        From, To, RecordName, size(Record) - 1, Record}).
+
+downgrade_record(mrargs, 1, _, Record) -> %% Remove vsn field
+    couch_util:record_to_unversioned(Record);
+downgrade_record(mrargs, 0, _, Record0) -> %% Replacing `stable` and `update` with `stale`
+    Record1 = erlang:delete_element(?STALE_POS, Record0),
+    erlang:setelement(?STALE_POS, Record1, false);
+downgrade_record(RecordName, From, To, Record) ->
+    error({missing_migration_for_record,
+        From, To, RecordName, size(Record) - 1, Record}).
+
+record_vsn(Record) ->
+    record_vsn(element(1, Record), size(Record) - 1, Record).
+
+record_vsn(mrargs, _, Record) when ?is_versioned(Record) -> ?record_vsn(Record);
+record_vsn(mrargs, 23, _Record) -> -1;
+record_vsn(mrargs, 24, _Record) -> 0.
+
 
 %% Updates 1.2.x or earlier view files to 1.3.x or later view files
 %% transparently, the first time the 1.2.x view file is opened by

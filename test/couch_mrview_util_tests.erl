@@ -32,8 +32,136 @@ couch_mrview_util_test_() ->
               validate_group_level(false,1))
     ].
 
+convert_mrargs_upgrade_test_() ->
+    LatestVsn = couch_mrview_util:record_vsn(#mrargs{}),
+    Versions = lists:seq(-1, LatestVsn - 1),
+    Cases = [{LatestVsn, LatestVsn} | [{V, V + 1} || V <- Versions]],
+    {
+        "Upgrade #mrargs{} tests",
+        [ convert_mrargs_test(From, To) || {From, To} <- Cases ]
+    }.
+
+convert_mrargs_downgrade_test_() ->
+    LatestVsn = couch_mrview_util:record_vsn(#mrargs{}),
+    Versions = lists:seq(LatestVsn, 0, -1),
+    Cases = [{LatestVsn, LatestVsn} | [{V, V - 1} || V <- Versions]],
+    {
+        "Downgrade #mrargs{} tests",
+        [ convert_mrargs_test(From, To) || {From, To} <- Cases ]
+    }.
+
+convert_mrargs_test_() ->
+    Current = #mrargs{},
+    Versions = lists:seq(-1, couch_mrview_util:record_vsn(Current)),
+    Cases = couch_tests_combinatorics:product([Versions, Versions]),
+    {
+        "Combinatorial #mrargs{} convert record tests",
+        [ convert_mrargs_test(From, To) || [From, To] <- Cases ]
+    }.
+
+
+convert_mrargs_test(From, To) ->
+    TestId = lists:flatten(io_lib:format("~w -> ~w", [From, To])),
+    {TestId, ?_assertEqual(
+        mrargs(To), couch_mrview_util:convert_record(From, To, mrargs(From))
+    )}.
+
 validate_group_level(Group, GroupLevel) ->
     Args0 = #mrargs{group=Group, group_level=GroupLevel, view_type=red},
     Args1 = couch_mrview_util:validate_args(Args0),
     Args1#mrargs.group_level.
 
+
+mrargs(-1) ->
+    {
+        mrargs,
+        view_type,
+        reduce,
+
+        preflight_fun,
+
+        start_key,
+        start_key_docid,
+        end_key,
+        end_key_docid,
+        keys,
+
+        direction,
+        limit,
+        skip,
+        group_level,
+        group,
+        false, %% stale
+        multi_get,
+        inclusive_end,
+        include_docs,
+        doc_options,
+        update_seq,
+        conflicts,
+        callback,
+        sorted,
+        extra
+    };
+mrargs(0) ->
+    {
+        mrargs,
+        view_type,
+        reduce,
+
+        preflight_fun,
+
+        start_key,
+        start_key_docid,
+        end_key,
+        end_key_docid,
+        keys,
+
+        direction,
+        limit,
+        skip,
+        group_level,
+        group,
+        false, %% stable
+        true, %% update,
+        multi_get,
+        inclusive_end,
+        include_docs,
+        doc_options,
+        update_seq,
+        conflicts,
+        callback,
+        sorted,
+        extra
+    };
+mrargs(1) ->
+    {
+        mrargs,
+        1,
+        view_type,
+        reduce,
+
+        preflight_fun,
+
+        start_key,
+        start_key_docid,
+        end_key,
+        end_key_docid,
+        keys,
+
+        direction,
+        limit,
+        skip,
+        group_level,
+        group,
+        false, %% stable
+        true, %% update,
+        multi_get,
+        inclusive_end,
+        include_docs,
+        doc_options,
+        update_seq,
+        conflicts,
+        callback,
+        sorted,
+        extra
+    }.
