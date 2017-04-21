@@ -199,12 +199,14 @@ view_sig_term(BaseSig, UpdateSeq, PurgeSeq, KeySeqIndexed, SeqIndexed, Args) ->
 
 
 init_state(Db, Fd, #mrst{views=Views}=State, nil) ->
+    Seq = 0,
+    PurgeSeq = couch_db:get_purge_seq(Db),
     Header = #mrheader{
-        seq=0,
-        purge_seq=couch_db:get_purge_seq(Db),
+        seq=Seq,
+        purge_seq=PurgeSeq,
         id_btree_state=nil,
         log_btree_state=nil,
-        view_states=[make_view_state(#mrview{}) || _ <- Views]
+        view_states=[convert_view_state(nil, Seq, PurgeSeq) || _ <- Views]
     },
     init_state(Db, Fd, State, Header);
 % read <= 1.2.x header record and transpile it to >=1.3.x
@@ -219,7 +221,7 @@ init_state(Db, Fd, State, #index_header{
         purge_seq=PurgeSeq,
         id_btree_state=IdBtreeState,
         log_btree_state=nil,
-        view_states=[make_view_state(V) || V <- ViewStates]
+        view_states=[convert_view_state(V, Seq, PurgeSeq) || V <- ViewStates]
     });
 init_state(Db, Fd, State, Header) ->
     #mrst{
@@ -975,11 +977,12 @@ make_view_state(#mrview{} = View) ->
         KSeqBTState,
         View#mrview.update_seq,
         View#mrview.purge_seq
-    };
-make_view_state({BTState, UpdateSeq, PurgeSeq}) ->
+    }.
+
+convert_view_state({BTState, UpdateSeq, PurgeSeq}, _, _) ->
     {BTState, nil, nil, UpdateSeq, PurgeSeq};
-make_view_state(nil) ->
-    {nil, nil, nil, 0, 0}.
+convert_view_state(nil, UpdateSeq, PurgeSeq) ->
+    {nil, nil, nil, UpdateSeq, PurgeSeq}.
 
 
 get_key_btree_state(ViewState) ->
